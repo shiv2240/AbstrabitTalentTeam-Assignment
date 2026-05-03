@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { createClient } from "@/utils/supabase/client";
 import { Bookmark } from "@/types/bookmark";
 import toast from "react-hot-toast";
@@ -8,7 +8,8 @@ import toast from "react-hot-toast";
 type Props = {
   userId: string;
   onClose: () => void;
-  onAdded: (bookmark: Bookmark) => void;
+  onSuccess: (bookmark: Bookmark) => void;
+  bookmark?: Bookmark; // If provided, we are in Edit mode
 };
 
 function isValidUrl(value: string): boolean {
@@ -20,14 +21,15 @@ function isValidUrl(value: string): boolean {
   }
 }
 
-export function AddBookmarkModal({ userId, onClose, onAdded }: Props) {
-  const [url, setUrl] = useState("");
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [tagsInput, setTagsInput] = useState("");
+export function BookmarkModal({ userId, onClose, onSuccess, bookmark }: Props) {
+  const [url, setUrl] = useState(bookmark?.url ?? "");
+  const [title, setTitle] = useState(bookmark?.title ?? "");
+  const [description, setDescription] = useState(bookmark?.description ?? "");
+  const [tagsInput, setTagsInput] = useState(bookmark?.tags?.join(", ") ?? "");
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState<{ url?: string; title?: string }>({});
 
+  const isEditing = !!bookmark;
   const supabase = createClient();
 
   const validate = () => {
@@ -55,44 +57,57 @@ export function AddBookmarkModal({ userId, onClose, onAdded }: Props) {
       .map((t) => t.trim())
       .filter(Boolean);
 
-    const { data, error } = await supabase
-      .from("bookmarks")
-      .insert({
-        user_id: userId,
-        url: url.trim(),
-        title: title.trim(),
-        description: description.trim() || null,
-        tags,
-      })
-      .select()
-      .single();
+    const bookmarkData = {
+      user_id: userId,
+      url: url.trim(),
+      title: title.trim(),
+      description: description.trim() || null,
+      tags,
+    };
+
+    let result;
+    if (isEditing) {
+      result = await supabase
+        .from("bookmarks")
+        .update(bookmarkData)
+        .eq("id", bookmark.id)
+        .select()
+        .single();
+    } else {
+      result = await supabase
+        .from("bookmarks")
+        .insert(bookmarkData)
+        .select()
+        .single();
+    }
 
     setIsLoading(false);
 
-    if (error) {
-      toast.error("Failed to save bookmark. Please try again.");
+    if (result.error) {
+      toast.error(`Failed to ${isEditing ? "update" : "save"} bookmark.`);
       return;
     }
 
-    toast.success("Bookmark saved!");
-    onAdded(data as Bookmark);
+    toast.success(`Bookmark ${isEditing ? "updated" : "saved"}!`);
+    onSuccess(result.data as Bookmark);
+    onClose();
   };
 
   return (
     <div
-      className="fixed inset-0 z-[100] flex items-center justify-center p-md bg-slate-900/10 backdrop-blur-sm animate-in fade-in duration-200"
+      className="fixed inset-0 z-[100] flex items-center justify-center p-md bg-slate-900/20 backdrop-blur-sm animate-in fade-in duration-200"
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
-      {/* Modal Card */}
-      <div className="glass-panel w-full rounded-2xl ambient-shadow overflow-hidden flex flex-col transition-all modal-panel shadow-2xl border border-white/40 ring-1 ring-black/5">
-        {/* Modal Header */}
+      <div className="glass-panel w-full rounded-[32px] ambient-shadow overflow-hidden flex flex-col transition-all modal-panel shadow-2xl border border-white/40 ring-1 ring-black/5">
         <div className="px-xl pt-xl pb-md flex items-center justify-between">
           <div>
             <h2 className="font-h1 text-h1 text-on-surface mb-xs">
-              Add Bookmark
+              {isEditing ? "Edit Bookmark" : "Add Bookmark"}
             </h2>
             <p className="text-body-md text-on-surface-variant">
-              Save a new link to your curated collection.
+              {isEditing
+                ? "Update the details of your saved link."
+                : "Save a new link to your curated collection."}
             </p>
           </div>
           <button
@@ -105,16 +120,14 @@ export function AddBookmarkModal({ userId, onClose, onAdded }: Props) {
           </button>
         </div>
 
-        {/* Modal Content (Form) */}
         <form onSubmit={handleSubmit} className="px-xl pb-xl space-y-lg">
-          {/* URL Field */}
           <div className="space-y-xs">
-            <label className="text-label-caps uppercase text-outline font-semibold tracking-widest px-1">
+            <label className="text-[10px] uppercase text-outline font-bold tracking-widest px-1">
               URL
             </label>
             <div className="group relative">
               <input
-                className={`w-full bg-surface-container-lowest border ${errors.url ? "border-error" : "border-slate-200/50"} rounded-xl px-lg py-md text-body-md focus:ring-2 focus:ring-primary/10 focus:border-primary outline-none transition-all shadow-sm`}
+                className={`w-full bg-surface-container-lowest border ${errors.url ? "border-error" : "border-slate-200/50"} rounded-2xl px-lg py-md text-body-md focus:ring-2 focus:ring-primary/10 focus:border-primary outline-none transition-all shadow-sm`}
                 placeholder="https://example.com/insightful-article"
                 type="url"
                 value={url}
@@ -132,14 +145,13 @@ export function AddBookmarkModal({ userId, onClose, onAdded }: Props) {
             )}
           </div>
 
-          {/* Title Field */}
           <div className="space-y-xs">
-            <label className="text-label-caps uppercase text-outline font-semibold tracking-widest px-1">
+            <label className="text-[10px] uppercase text-outline font-bold tracking-widest px-1">
               Title
             </label>
             <div className="group relative">
               <input
-                className={`w-full bg-surface-container-lowest border ${errors.title ? "border-error" : "border-slate-200/50"} rounded-xl px-lg py-md text-body-md focus:ring-2 focus:ring-primary/10 focus:border-primary outline-none transition-all shadow-sm`}
+                className={`w-full bg-surface-container-lowest border ${errors.title ? "border-error" : "border-slate-200/50"} rounded-2xl px-lg py-md text-body-md focus:ring-2 focus:ring-primary/10 focus:border-primary outline-none transition-all shadow-sm`}
                 placeholder="Enter a descriptive title..."
                 type="text"
                 value={title}
@@ -158,14 +170,13 @@ export function AddBookmarkModal({ userId, onClose, onAdded }: Props) {
             )}
           </div>
 
-          {/* Description Field */}
           <div className="space-y-xs">
-            <label className="text-label-caps uppercase text-outline font-semibold tracking-widest px-1">
+            <label className="text-[10px] uppercase text-outline font-bold tracking-widest px-1">
               Description
             </label>
             <div className="group relative">
               <textarea
-                className="w-full bg-surface-container-lowest border border-slate-200/50 rounded-xl px-lg py-md text-body-md focus:ring-2 focus:ring-primary/10 focus:border-primary outline-none transition-all resize-none shadow-sm"
+                className="w-full bg-surface-container-lowest border border-slate-200/50 rounded-2xl px-lg py-md text-body-md focus:ring-2 focus:ring-primary/10 focus:border-primary outline-none transition-all resize-none shadow-sm"
                 placeholder="What makes this bookmark special?"
                 rows={3}
                 value={description}
@@ -177,14 +188,13 @@ export function AddBookmarkModal({ userId, onClose, onAdded }: Props) {
             </div>
           </div>
 
-          {/* Tags Field */}
           <div className="space-y-xs">
-            <label className="text-label-caps uppercase text-outline font-semibold tracking-widest px-1">
+            <label className="text-[10px] uppercase text-outline font-bold tracking-widest px-1">
               Tags
             </label>
             <div className="group relative">
               <input
-                className="w-full bg-surface-container-lowest border border-slate-200/50 rounded-xl px-lg py-md text-body-md focus:ring-2 focus:ring-primary/10 focus:border-primary outline-none transition-all shadow-sm"
+                className="w-full bg-surface-container-lowest border border-slate-200/50 rounded-2xl px-lg py-md text-body-md focus:ring-2 focus:ring-primary/10 focus:border-primary outline-none transition-all shadow-sm"
                 placeholder="Design, Inspiration, Case Study"
                 type="text"
                 value={tagsInput}
@@ -196,27 +206,28 @@ export function AddBookmarkModal({ userId, onClose, onAdded }: Props) {
             </div>
           </div>
 
-          {/* Footer Actions */}
           <div className="flex items-center justify-end gap-md pt-md">
             <button
               type="button"
               onClick={onClose}
-              className="px-xl py-md text-body-md font-semibold text-outline hover:text-on-surface transition-colors"
+              className="px-xl py-md text-body-md font-bold text-outline hover:text-on-surface transition-colors"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={isLoading}
-              className="primary-gradient px-xl py-md rounded-xl text-body-md font-bold text-white shadow-lg hover:shadow-primary/20 active:opacity-80 transition-all transform hover:-translate-y-0.5 disabled:opacity-50 flex items-center gap-2"
+              className="primary-gradient px-xl py-md rounded-2xl text-body-md font-bold text-white shadow-lg hover:shadow-primary/20 active:opacity-80 transition-all transform hover:-translate-y-0.5 disabled:opacity-50 flex items-center gap-2"
             >
               {isLoading ? (
                 <>
                   <span className="material-symbols-outlined animate-spin text-sm">
                     progress_activity
                   </span>
-                  Saving...
+                  {isEditing ? "Updating..." : "Saving..."}
                 </>
+              ) : isEditing ? (
+                "Update Bookmark"
               ) : (
                 "Save Bookmark"
               )}

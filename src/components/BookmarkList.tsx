@@ -7,18 +7,22 @@ type Props = {
   bookmarks: Bookmark[];
   searchQuery: string;
   onDelete: (id: string) => void;
+  onEdit: (bookmark: Bookmark) => void;
   isEmpty: boolean;
   isFiltered: boolean;
   onAddClick: () => void;
+  layout?: "grid" | "list";
 };
 
 export function BookmarkList({
   bookmarks,
   searchQuery,
   onDelete,
+  onEdit,
   isEmpty,
   isFiltered,
   onAddClick,
+  layout = "grid",
 }: Props) {
   // Empty state: no bookmarks at all
   if (isEmpty) {
@@ -67,32 +71,55 @@ export function BookmarkList({
   }
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-gutter">
-      {bookmarks.map((bookmark, index) => (
+    <div className={layout === "grid" 
+      ? "grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-gutter" 
+      : "flex flex-col gap-4"}
+    >
+      {bookmarks.map((bookmark) => (
         <div key={bookmark.id} className="h-full">
           <BookmarkItem
             bookmark={bookmark}
             searchQuery={searchQuery}
             onDelete={onDelete}
-            featured={index === 0}
+            onEdit={onEdit}
+            layout={layout}
           />
         </div>
       ))}
 
-      {/* Add New Card Placeholder */}
-      <button
-        onClick={onAddClick}
-        className="flex flex-col items-center justify-center h-full min-h-[320px] p-xl border-2 border-dashed border-outline-variant/50 rounded-xl hover:bg-white hover:border-primary/50 transition-all group"
-      >
-        <div className="w-12 h-12 rounded-full bg-surface flex items-center justify-center mb-md group-hover:bg-primary/10 group-hover:text-primary transition-all">
-          <span className="material-symbols-outlined text-outline group-hover:text-primary">
-            add_circle
+      {/* Add New Trigger */}
+      {layout === "grid" ? (
+        <button
+          onClick={onAddClick}
+          className="flex flex-col items-center justify-center h-full min-h-[320px] p-xl border-2 border-dashed border-outline-variant/30 rounded-3xl hover:bg-white hover:border-primary/50 transition-all group bg-surface/50"
+        >
+          <div className="w-14 h-14 rounded-2xl bg-surface-container flex items-center justify-center mb-4 group-hover:bg-primary/10 transition-colors">
+            <span className="material-symbols-outlined text-outline group-hover:text-primary transition-colors text-3xl">
+              add_circle
+            </span>
+          </div>
+          <span className="font-display font-bold text-outline group-hover:text-on-surface transition-colors">
+            Add New Bookmark
           </span>
-        </div>
-        <span className="font-body-lg font-bold text-outline group-hover:text-on-surface">
-          Add New Bookmark
-        </span>
-      </button>
+        </button>
+      ) : (
+        <button
+          onClick={onAddClick}
+          className="flex items-center gap-6 p-4 border-2 border-dashed border-outline-variant/30 rounded-2xl hover:bg-white hover:border-primary/50 transition-all group bg-surface/50 w-full"
+        >
+          <div className="w-16 h-16 rounded-xl bg-surface-container flex items-center justify-center group-hover:bg-primary/10 transition-colors shrink-0">
+            <span className="material-symbols-outlined text-outline group-hover:text-primary transition-colors text-2xl">
+              add_circle
+            </span>
+          </div>
+          <div className="flex-1 text-left">
+            <span className="font-display font-bold text-outline group-hover:text-on-surface transition-colors">
+              Add New Bookmark
+            </span>
+            <p className="text-xs text-outline/60 mt-0.5">Expand your digital library</p>
+          </div>
+        </button>
+      )}
     </div>
   );
 }

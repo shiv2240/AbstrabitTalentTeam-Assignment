@@ -2,8 +2,8 @@
 
 > A production-ready bookmark manager built as a 72-hour take-home assessment for Abstrabit Talent Team.
 
-**Live Demo:** [https://your-app.vercel.app](https://your-app.vercel.app) *(replace after deploy)*
-**GitHub:** [https://github.com/your-username/smart-bookmarks](https://github.com/your-username/smart-bookmarks)
+**Live Demo:** [https://your-app.vercel.app](https://your-app.vercel.app) _(replace after deploy)_
+**GitHub:** [https://github.com/shiv2240/AbstrabitTalentTeam-Assignment](https://github.com/your-username/smart-bookmarks)
 
 ---
 
@@ -12,6 +12,8 @@
 - 🔐 **Google OAuth Authentication** — Seamless sign-in via Supabase Auth, no passwords
 - 🔖 **Add & Delete Bookmarks** — URL + title + optional description, with a confirmation step for deletes
 - 🏷️ **Tags & Filtering (Bonus)** — Tag any bookmark with comma-separated labels; filter your collection instantly
+- 📁 **Visual Collections (Bonus)** — View your bookmarks organized into smart folders based on tags
+- 🔔 **Notification Center (Bonus)** — A real-time activity feed tracking all library changes instantly
 - ⚡ **Real-time Sync** — Bookmarks appear in all open tabs without any page refresh
 - 🔒 **Private by Default** — Row Level Security at the database layer ensures users only ever see their own data
 - 🔍 **Live Search** — Filter bookmarks by title, URL, or description as you type
@@ -21,14 +23,14 @@
 
 ## Tech Stack
 
-| Layer | Technology |
-|-------|-----------|
-| Framework | Next.js 15 (App Router) |
-| Auth | Supabase Auth (Google OAuth) |
-| Database | Supabase PostgreSQL |
-| Realtime | Supabase Realtime |
-| Styling | Tailwind CSS v4 |
-| Deployment | Vercel |
+| Layer      | Technology                   |
+| ---------- | ---------------------------- |
+| Framework  | Next.js 15 (App Router)      |
+| Auth       | Supabase Auth (Google OAuth) |
+| Database   | Supabase PostgreSQL          |
+| Realtime   | Supabase Realtime            |
+| Styling    | Tailwind CSS v4              |
+| Deployment | Vercel                       |
 
 ---
 
@@ -118,41 +120,49 @@ Powered by **Supabase Realtime Postgres Changes** — Supabase streams WAL event
 ```ts
 const channel = supabase
   .channel("bookmarks-realtime")
-  .on("postgres_changes", {
-    event: "INSERT",
-    schema: "public",
-    table: "bookmarks",
-    filter: `user_id=eq.${user.id}`,
-  }, (payload) => {
-    setBookmarks(prev => {
-      if (prev.some(b => b.id === payload.new.id)) return prev; // dedup
-      return [payload.new as Bookmark, ...prev];
-    });
-  })
+  .on(
+    "postgres_changes",
+    {
+      event: "INSERT",
+      schema: "public",
+      table: "bookmarks",
+      filter: `user_id=eq.${user.id}`,
+    },
+    (payload) => {
+      setBookmarks((prev) => {
+        if (prev.some((b) => b.id === payload.new.id)) return prev; // dedup
+        return [payload.new as Bookmark, ...prev];
+      });
+    },
+  )
   .subscribe();
 
 // Cleanup on unmount — prevents memory leaks
-return () => { supabase.removeChannel(channel); };
+return () => {
+  supabase.removeChannel(channel);
+};
 ```
 
 The `filter` scopes the subscription to the current user's rows only, preventing unnecessary data transfer. Cleanup is handled in the `useEffect` return function.
 
 ---
 
-## Bonus Feature: Tags & Filtering
+## Bonus Features: Product Thinking
 
-When adding a bookmark, users type comma-separated tags (e.g., `dev, tools, ai`), stored as a PostgreSQL `TEXT[]` array. On the dashboard, all unique tags appear as pill buttons. Clicking filters the list client-side — no extra DB queries.
+I implemented three major bonus features to transform a simple list into a professional digital library:
 
-**Why?** Bookmark managers become unusable as lists grow. Tags provide lightweight, many-to-many organization with no folder nesting complexity and instant UX feedback.
+1. **🏷️ Tags & Smart Filtering**: Stored as a PostgreSQL `TEXT[]` array for performance.
+2. **📁 Visual Collections**: Automatically groups bookmarks into visual "folders" based on tags. This solves the "list fatigue" problem by giving users a high-level overview of their interests.
+3. **🔔 Notification Center**: A real-time activity feed. **Why?** In a multi-device world, users need feedback when sync events happen. If you save a link on mobile, your desktop ZenMark will pulse the notification bell to let you know it's safely stored.
 
 ---
 
 ## Challenges & Solutions
 
-| Challenge | Solution |
-|-----------|----------|
-| Optimistic + realtime double-insert | Deduplication by `id` before adding to state |
-| `cookies()` is async in Next.js 15 | `await cookies()` in server client |
+| Challenge                              | Solution                                              |
+| -------------------------------------- | ----------------------------------------------------- |
+| Optimistic + realtime double-insert    | Deduplication by `id` before adding to state          |
+| `cookies()` is async in Next.js 15     | `await cookies()` in server client                    |
 | Google avatar blocked by Next.js Image | Added `lh3.googleusercontent.com` to `remotePatterns` |
 
 ---
@@ -184,4 +194,6 @@ When adding a bookmark, users type comma-separated tags (e.g., `dev, tools, ai`)
 - [x] Delete with confirmation step
 - [x] Polished responsive UI (Tailwind CSS)
 - [x] Ready for Vercel deployment
-- [x] Bonus feature: Tags & filtering
+- [x] Bonus: Tags & Filtering
+- [x] Bonus: Visual Collections
+- [x] Bonus: Notification Center

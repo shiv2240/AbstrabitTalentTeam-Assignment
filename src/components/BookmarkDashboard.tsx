@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { createClient } from "@/utils/supabase/client";
 import { Bookmark } from "@/types/bookmark";
 import { BookmarkList } from "./BookmarkList";
-import { AddBookmarkModal } from "./AddBookmarkModal";
+import { BookmarkModal } from "./BookmarkModal";
 import { SettingsView } from "./SettingsView";
 import { CollectionsView } from "./CollectionsView";
 import { NotificationCenter, Notification } from "./NotificationCenter";
@@ -27,15 +27,17 @@ type Props = {
 export function BookmarkDashboard({ user, initialBookmarks }: Props) {
   const [bookmarks, setBookmarks] = useState<Bookmark[]>(initialBookmarks);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingBookmark, setEditingBookmark] = useState<Bookmark | undefined>(undefined);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTag, setActiveTag] = useState<string | null>(null);
   const [currentView, setCurrentView] = useState<
     "all" | "recent" | "collections"
   >("all");
+  const [layout, setLayout] = useState<'grid' | 'list'>('grid');
   const [isRealtime, setIsRealtime] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
-
+  
   const supabase = createClient();
   const pathname = usePathname();
 
@@ -168,9 +170,17 @@ export function BookmarkDashboard({ user, initialBookmarks }: Props) {
         return [newBookmark, ...prev];
       });
       addNotification("add", "Bookmark Saved", `Added "${newBookmark.title}"`);
-      setIsModalOpen(false);
     },
     [addNotification],
+  );
+
+  const handleBookmarkUpdated = useCallback(
+    (updatedBookmark: Bookmark) => {
+      setBookmarks((prev) =>
+        prev.map((b) => (b.id === updatedBookmark.id ? updatedBookmark : b)),
+      );
+    },
+    [],
   );
 
   const handleBookmarkDeleted = useCallback((id: string) => {
@@ -178,13 +188,13 @@ export function BookmarkDashboard({ user, initialBookmarks }: Props) {
   }, []);
 
   const handleSignOut = async () => {
-    await fetch("/auth/logout", { method: "POST" });
+    await supabase.auth.signOut();
     window.location.href = "/";
   };
 
   return (
-    <div className="bg-surface font-body-md text-on-surface min-h-screen">
-      {/* SideNavBar Shell */}
+    <div className="min-h-screen bg-surface-container-lowest flex font-display text-on-surface">
+      {/* Sidebar Navigation */}
       <aside className="fixed left-0 top-0 h-full flex flex-col pt-8 pb-4 bg-white/70 backdrop-blur-xl h-screen w-64 border-r border-outline-variant/20 z-50">
         <div className="px-6 mb-10">
           <Link href="/dashboard" className="block">
@@ -272,9 +282,9 @@ export function BookmarkDashboard({ user, initialBookmarks }: Props) {
               {allTags.map((tag) => (
                 <div
                   key={tag}
-                  className={`cursor-pointer rounded-xl px-4 py-2 flex items-center gap-3 transition-all ${
+                  className={`px-4 py-2 flex items-center gap-3 transition-all cursor-pointer rounded-xl ${
                     activeTag === tag
-                      ? "text-primary font-semibold border-l-2 border-primary bg-primary/5"
+                      ? "text-primary font-semibold bg-primary/5"
                       : "text-outline hover:text-on-background hover:translate-x-1"
                   }`}
                   onClick={() => setActiveTag(tag)}
@@ -300,92 +310,93 @@ export function BookmarkDashboard({ user, initialBookmarks }: Props) {
         </div>
       </aside>
 
-      {/* TopNavBar Shell */}
-      <header className="fixed top-0 right-0 left-64 z-40 flex items-center justify-between px-8 w-[calc(100%-16rem)] h-16 border-b border-outline-variant/20 bg-white/80 backdrop-blur-2xl shadow-sm">
-        <div className="flex items-center gap-4 w-1/2">
-          <div className="relative w-full ">
-            <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline text-sm">
-              search
-            </span>
-            <input
-              className="w-full bg-surface-container border-none rounded-lg pl-10 pr-4 py-2 text-body-sm focus:ring-2 focus:ring-primary/20 transition-all outline-none"
-              placeholder="Search clarity..."
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
-          </div>
-        </div>
-        <div className="flex items-center gap-6">
-          <div className="hidden md:flex items-center gap-3 text-xs">
-            {isRealtime ? (
-              <span className="flex items-center gap-1.5 text-primary">
-                <span className="w-1.5 h-1.5 bg-primary rounded-full animate-pulse"></span>
-                Live
+      {/* Main Content Area */}
+      <main className="ml-64 flex-1 p-8 min-h-screen">
+        {/* TopNavBar Shell */}
+        <header className="fixed top-0 right-0 left-64 z-40 flex items-center justify-between px-8 w-[calc(100%-16rem)] h-16 border-b border-outline-variant/20 bg-white/80 backdrop-blur-2xl shadow-sm">
+          <div className="flex items-center gap-4 w-1/2">
+            <div className="relative w-full ">
+              <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline text-sm">
+                search
               </span>
-            ) : (
-              <span className="flex items-center gap-1.5 text-outline">
-                <span className="w-1.5 h-1.5 bg-outline rounded-full"></span>
-                Syncing
-              </span>
-            )}
+              <input
+                type="text"
+                placeholder="Search bookmarks, URLs, or tags..."
+                className="w-full h-10 pl-10 pr-4 bg-surface-container-low border border-outline-variant/30 rounded-xl text-body-sm focus:outline-none focus:ring-2 focus:ring-primary/10 focus:border-primary transition-all"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+            </div>
           </div>
 
-          <button
-            onClick={() => setIsModalOpen(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-primary to-secondary text-white rounded-lg font-body-sm font-semibold hover:opacity-90 active:scale-95 transition-all shadow-sm"
-          >
-            <span className="material-symbols-outlined text-sm">add</span>
-            Add Bookmark
-          </button>
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2 border-r border-outline-variant/30 pr-4">
+              <div
+                className={`w-2 h-2 rounded-full ${isRealtime ? "bg-success" : "bg-outline/30 animate-pulse"}`}
+              ></div>
+              <span className="text-[10px] font-bold text-outline uppercase tracking-widest">
+                {isRealtime ? "Live Sync" : "Connecting..."}
+              </span>
+            </div>
 
-          <div className="flex items-center gap-4 border-l border-outline-variant/30 pl-6 relative">
             <button
               onClick={() => {
-                setIsNotificationsOpen(!isNotificationsOpen);
-                if (!isNotificationsOpen) {
-                  setNotifications((prev) =>
-                    prev.map((n) => ({ ...n, isRead: true })),
-                  );
-                }
+                setEditingBookmark(undefined);
+                setIsModalOpen(true);
               }}
-              className="material-symbols-outlined text-outline hover:bg-surface-container p-2 rounded-full transition-colors relative"
+              className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-primary to-secondary text-white rounded-lg font-body-sm font-semibold hover:opacity-90 active:scale-95 transition-all shadow-sm"
             >
-              notifications
-              {notifications.some((n) => !n.isRead) && (
-                <span className="absolute top-2 right-2 w-2 h-2 bg-error rounded-full animate-pulse border-2 border-white"></span>
-              )}
+              <span className="material-symbols-outlined text-sm">add</span>
+              Add Bookmark
             </button>
 
-            {isNotificationsOpen && (
-              <NotificationCenter
-                notifications={notifications}
-                onClear={() => setNotifications([])}
-              />
-            )}
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-full bg-surface-container overflow-hidden ring-2 ring-white ring-offset-2 ring-offset-surface-container flex items-center justify-center">
-                {user.avatar ? (
-                  <Image
-                    src={user.avatar}
-                    alt={user.name}
-                    width={32}
-                    height={32}
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  <span className="text-sm font-bold text-outline">
-                    {user.name.charAt(0).toUpperCase()}
-                  </span>
+            <div className="flex items-center gap-4 border-l border-outline-variant/30 pl-6 relative">
+              <button
+                onClick={() => {
+                  setIsNotificationsOpen(!isNotificationsOpen);
+                  if (!isNotificationsOpen) {
+                    setNotifications((prev) =>
+                      prev.map((n) => ({ ...n, isRead: true })),
+                    );
+                  }
+                }}
+                className="material-symbols-outlined text-outline hover:bg-surface-container p-2 rounded-full transition-colors relative"
+              >
+                notifications
+                {notifications.some((n) => !n.isRead) && (
+                  <span className="absolute top-2 right-2 w-2 h-2 bg-error rounded-full animate-pulse border-2 border-white"></span>
                 )}
+              </button>
+
+              {isNotificationsOpen && (
+                <NotificationCenter
+                  notifications={notifications}
+                  onClear={() => setNotifications([])}
+                />
+              )}
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-full bg-surface-container overflow-hidden ring-2 ring-white ring-offset-2 ring-offset-surface-container flex items-center justify-center">
+                  {user.avatar ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={user.avatar}
+                      alt={user.name}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <span className="text-sm font-bold text-outline">
+                      {user.name.charAt(0).toUpperCase()}
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
           </div>
-        </div>
-      </header>
+        </header>
 
-      {/* Main Content Area */}
-      <main className="ml-64 pt-24 px-xl pb-xl min-h-screen">
+        {/* Space for fixed header */}
+        <div className="h-16 mb-8"></div>
+
         {/* Dashboard Header */}
         {!isSettingsPage && (
           <div className="flex items-end justify-between mb-lg">
@@ -408,11 +419,17 @@ export function BookmarkDashboard({ user, initialBookmarks }: Props) {
               </p>
             </div>
             <div className="flex gap-sm">
-              <button className="p-2 rounded-lg bg-white border border-outline-variant/50 text-outline hover:bg-surface-container transition-colors">
-                <span className="material-symbols-outlined">grid_view</span>
+              <button 
+                onClick={() => setLayout('grid')}
+                className={`p-2 rounded-lg border transition-all ${layout === 'grid' ? 'bg-primary/10 border-primary text-primary shadow-sm' : 'bg-white border-outline-variant/50 text-outline hover:bg-surface-container'}`}
+              >
+                <span className="material-symbols-outlined text-sm">grid_view</span>
               </button>
-              <button className="p-2 rounded-lg bg-white border border-outline-variant/50 text-outline hover:bg-surface-container transition-colors">
-                <span className="material-symbols-outlined">view_list</span>
+              <button 
+                onClick={() => setLayout('list')}
+                className={`p-2 rounded-lg border transition-all ${layout === 'list' ? 'bg-primary/10 border-primary text-primary shadow-sm' : 'bg-white border-outline-variant/50 text-outline hover:bg-surface-container'}`}
+              >
+                <span className="material-symbols-outlined text-sm">view_list</span>
               </button>
             </div>
           </div>
@@ -434,25 +451,40 @@ export function BookmarkDashboard({ user, initialBookmarks }: Props) {
             bookmarks={filteredBookmarks}
             searchQuery={searchQuery}
             onDelete={handleBookmarkDeleted}
+            onEdit={(b) => {
+              setEditingBookmark(b);
+              setIsModalOpen(true);
+            }}
             isEmpty={bookmarks.length === 0}
             isFiltered={filteredBookmarks.length < bookmarks.length}
-            onAddClick={() => setIsModalOpen(true)}
+            onAddClick={() => {
+              setEditingBookmark(undefined);
+              setIsModalOpen(true);
+            }}
+            layout={layout}
           />
         )}
       </main>
 
-      {/* Add Bookmark Modal */}
+      {/* Add/Edit Bookmark Modal */}
       {isModalOpen && (
-        <AddBookmarkModal
+        <BookmarkModal
           userId={user.id}
-          onClose={() => setIsModalOpen(false)}
-          onAdded={handleBookmarkAdded}
+          bookmark={editingBookmark}
+          onClose={() => {
+            setIsModalOpen(false);
+            setEditingBookmark(undefined);
+          }}
+          onSuccess={editingBookmark ? handleBookmarkUpdated : handleBookmarkAdded}
         />
       )}
 
       {/* Contextual FAB (Mobile friendly/Always accessible) */}
       <button
-        onClick={() => setIsModalOpen(true)}
+        onClick={() => {
+          setEditingBookmark(undefined);
+          setIsModalOpen(true);
+        }}
         className="fixed bottom-8 right-8 w-14 h-14 bg-gradient-to-tr from-primary to-secondary text-white rounded-full shadow-lg flex items-center justify-center hover:scale-105 active:scale-95 transition-all z-50 md:hidden"
       >
         <span className="material-symbols-outlined text-2xl">add</span>

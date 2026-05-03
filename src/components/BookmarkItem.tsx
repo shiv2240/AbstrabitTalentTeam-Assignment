@@ -35,12 +35,26 @@ function getDomain(url: string): string {
   }
 }
 
-export function BookmarkItem({ bookmark, searchQuery, onDelete, featured = false }: Props) {
+export function BookmarkItem({
+  bookmark,
+  searchQuery,
+  onDelete,
+  onEdit,
+  featured = false,
+  layout = "grid",
+}: Props) {
   const [isDeleting, setIsDeleting] = useState(false);
   const supabase = createClient();
 
+  const handleEdit = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    onEdit(bookmark);
+  };
+
   const handleDelete = async (e: React.MouseEvent) => {
     e.preventDefault();
+    e.stopPropagation();
     if (confirm("Delete this bookmark?")) {
       setIsDeleting(true);
       const { error } = await supabase
@@ -66,6 +80,84 @@ export function BookmarkItem({ bookmark, searchQuery, onDelete, featured = false
 
   // Deterministic placeholder image based on ID
   const imageUrl = `https://picsum.photos/seed/${bookmark.id}/800/600`;
+
+  if (layout === "list") {
+    return (
+      <article className="glass-card rounded-2xl overflow-hidden ambient-shadow border border-white/40 hover:translate-x-1 transition-all duration-300 group">
+        <a
+          href={bookmark.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center p-4 gap-6"
+        >
+          {/* Compact Image */}
+          <div className="w-16 h-16 rounded-xl overflow-hidden shrink-0 shadow-sm border border-white/20">
+            <img
+              src={imageUrl}
+              alt=""
+              className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+            />
+          </div>
+
+          {/* Title & Info */}
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 mb-1">
+              <span className="text-[10px] font-bold text-primary uppercase tracking-widest bg-primary/5 px-2 py-0.5 rounded">
+                {getDomain(bookmark.url)}
+              </span>
+              <span className="text-[10px] text-outline font-medium">
+                {formattedDate}
+              </span>
+            </div>
+            <h3 className="font-display font-bold text-on-surface truncate">
+              {highlight(bookmark.title, searchQuery)}
+            </h3>
+            {bookmark.description && (
+              <p className="text-xs text-outline line-clamp-1 mt-0.5">
+                {highlight(bookmark.description, searchQuery)}
+              </p>
+            )}
+          </div>
+
+          {/* Tags (Desktop only) */}
+          <div className="hidden lg:flex flex-wrap gap-1.5 max-w-[200px]">
+            {bookmark.tags?.slice(0, 3).map((tag) => (
+              <span
+                key={tag}
+                className="px-2 py-0.5 bg-surface-container text-on-surface-variant text-[10px] font-bold rounded-lg border border-outline-variant/20"
+              >
+                #{tag}
+              </span>
+            ))}
+          </div>
+
+          {/* Actions */}
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={handleEdit}
+              className="w-9 h-9 flex items-center justify-center rounded-xl text-outline hover:text-primary hover:bg-primary/5 transition-all"
+              title="Edit Bookmark"
+            >
+              <span className="material-symbols-outlined text-lg">edit</span>
+            </button>
+            <button
+              onClick={handleDelete}
+              disabled={isDeleting}
+              className="w-9 h-9 flex items-center justify-center rounded-xl text-outline hover:text-error hover:bg-error/5 transition-all"
+              title="Delete Bookmark"
+            >
+              <span className="material-symbols-outlined text-lg">delete</span>
+            </button>
+            <div className="w-9 h-9 flex items-center justify-center rounded-xl text-outline group-hover:text-primary group-hover:bg-primary/5 transition-all">
+              <span className="material-symbols-outlined text-lg">
+                open_in_new
+              </span>
+            </div>
+          </div>
+        </a>
+      </article>
+    );
+  }
 
   if (featured) {
     return (
@@ -108,6 +200,12 @@ export function BookmarkItem({ bookmark, searchQuery, onDelete, featured = false
             <div className="flex items-center justify-between mt-auto">
               <span className="text-body-sm text-outline">Added {formattedDate}</span>
               <div className="flex gap-3">
+                <button 
+                  onClick={handleEdit}
+                  className="material-symbols-outlined text-outline hover:text-primary transition-colors p-1"
+                >
+                  edit
+                </button>
                 <button 
                   onClick={handleDelete}
                   disabled={isDeleting}
@@ -161,6 +259,12 @@ export function BookmarkItem({ bookmark, searchQuery, onDelete, featured = false
           <div className="flex items-center justify-between mt-auto">
             <span className="text-body-sm text-outline">{formattedDate}</span>
             <div className="flex gap-3">
+              <button 
+                onClick={handleEdit}
+                className="material-symbols-outlined text-outline hover:text-primary transition-colors p-1 text-[20px]"
+              >
+                edit
+              </button>
               <button 
                 onClick={handleDelete}
                 disabled={isDeleting}
