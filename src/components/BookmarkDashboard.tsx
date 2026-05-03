@@ -1,62 +1,48 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
-import { createClient } from "@/utils/supabase/client";
+import { useState, useEffect } from "react";
 import { Bookmark } from "@/types/bookmark";
+import { DashboardHeader } from "./DashboardHeader";
 import { BookmarkList } from "./BookmarkList";
 import { BookmarkModal } from "./BookmarkModal";
-import { SettingsView } from "./SettingsView";
-import { CollectionsView } from "./CollectionsView";
-import { NotificationCenter, Notification } from "./NotificationCenter";
-import Image from "next/image";
-import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { NotificationCenter } from "./NotificationCenter";
+import { createClient } from "@/utils/supabase/client";
+import { useRouter } from "next/navigation";
 
-type User = {
-  id: string;
-  email: string;
-  avatar: string | null;
-  name: string;
-};
-
-type Props = {
-  user: User;
+export function BookmarkDashboard({
+  user,
+  initialBookmarks,
+  totalCount,
+  currentPage,
+}: {
+  user: { id: string; email: string; name: string; avatar: string | null };
   initialBookmarks: Bookmark[];
-};
-
-export function BookmarkDashboard({ user, initialBookmarks }: Props) {
+  totalCount: number;
+  currentPage: number;
+}) {
   const [bookmarks, setBookmarks] = useState<Bookmark[]>(initialBookmarks);
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingBookmark, setEditingBookmark] = useState<Bookmark | undefined>(undefined);
   const [searchQuery, setSearchQuery] = useState("");
-  const [activeTag, setActiveTag] = useState<string | null>(null);
-  const [currentView, setCurrentView] = useState<
-    "all" | "recent" | "collections"
-  >("all");
-  const [layout, setLayout] = useState<'grid' | 'list'>('grid');
-  const [isRealtime, setIsRealtime] = useState(false);
-  const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
-  
-  const supabase = createClient();
-  const pathname = usePathname();
-
-  const isSettingsPage = pathname === "/dashboard/settings";
-
-  const addNotification = useCallback(
-    (type: Notification["type"], title: string, message: string) => {
-      const newNotif: Notification = {
-        id: Math.random().toString(36).substring(7),
-        type,
-        title,
-        message,
-        time: new Date(),
-        isRead: false,
-      };
-      setNotifications((prev) => [newNotif, ...prev].slice(0, 20)); // Keep last 20
-    },
-    [],
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingBookmark, setEditingBookmark] = useState<Bookmark | null>(null);
+  const [layout, setLayout] = useState<"grid" | "list">("grid");
+  const [activeTab, setActiveTab] = useState<"all" | "recent" | "collections">(
+    "all"
   );
+  const supabase = createClient();
+  const router = useRouter();
+
+  const pageSize = 9;
+  const totalPages = Math.ceil(totalCount / pageSize);
+
+  const handlePageChange = (newPage: number) => {
+    if (newPage < 1 || newPage > totalPages) return;
+    router.push(`/dashboard?page=${newPage}`);
+  };
+
+  // Sync state when server props change (on navigation)
+  useEffect(() => {
+    setBookmarks(initialBookmarks);
+  }, [initialBookmarks]);
 
   // Real-time subscription
   useEffect(() => {
@@ -65,430 +51,203 @@ export function BookmarkDashboard({ user, initialBookmarks }: Props) {
       .on(
         "postgres_changes",
         {
-          event: "INSERT",
+          event: "*",
           schema: "public",
           table: "bookmarks",
           filter: `user_id=eq.${user.id}`,
         },
-        (payload) => {
-          const newB = payload.new as Bookmark;
-          setBookmarks((prev) => {
-            if (prev.some((b) => b.id === newB.id)) return prev;
-            return [newB, ...prev];
-          });
-          addNotification(
-            "add",
-            "Bookmark Saved",
-            `Added "${newB.title}" to your library`,
-          );
-        },
+        () => {
+          // When a change occurs, refresh the server component to get updated slice & count
+          router.refresh();
+        }
       )
-      .on(
-        "postgres_changes",
-        {
-          event: "DELETE",
-          schema: "public",
-          table: "bookmarks",
-          filter: `user_id=eq.${user.id}`,
-        },
-        (payload) => {
-          setBookmarks((prev) => {
-            const deleted = prev.find((b) => b.id === payload.old.id);
-            if (deleted) {
-              addNotification(
-                "delete",
-                "Bookmark Removed",
-                `Deleted "${deleted.title}"`,
-              );
-            }
-            return prev.filter((b) => b.id !== payload.old.id);
-          });
-        },
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "UPDATE",
-          schema: "public",
-          table: "bookmarks",
-          filter: `user_id=eq.${user.id}`,
-        },
-        (payload) => {
-          const updated = payload.new as Bookmark;
-          setBookmarks((prev) =>
-            prev.map((b) => (b.id === updated.id ? updated : b)),
-          );
-          addNotification(
-            "update",
-            "Bookmark Updated",
-            `Modified details for "${updated.title}"`,
-          );
-        },
-      )
-      .subscribe((status) => {
-        setIsRealtime(status === "SUBSCRIBED");
-      });
+      .subscribe();
 
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [user.id, supabase, addNotification]);
+  }, [supabase, user.id, router]);
 
-  // Collect all unique tags across bookmarks
-  const allTags = Array.from(
-    new Set(bookmarks.flatMap((b) => b.tags ?? [])),
-  ).sort();
-
-  // Derived: filtered bookmarks
   const filteredBookmarks = bookmarks.filter((b) => {
-    // Search Filter
-    const matchesSearch =
-      searchQuery === "" ||
-      b.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      b.url.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (b.description?.toLowerCase().includes(searchQuery.toLowerCase()) ??
-        false);
-
-    // Tag Filter
-    const matchesTag = activeTag === null || b.tags?.includes(activeTag);
-
-    // View Filter
-    if (currentView === "recent") {
-      const oneWeekAgo = new Date();
-      oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
-      const isRecent = new Date(b.created_at) > oneWeekAgo;
-      return matchesSearch && matchesTag && isRecent;
-    }
-
-    return matchesSearch && matchesTag;
+    const query = searchQuery.toLowerCase();
+    return (
+      b.title.toLowerCase().includes(query) ||
+      b.url.toLowerCase().includes(query) ||
+      b.description?.toLowerCase().includes(query) ||
+      b.tags?.some((t) => t.toLowerCase().includes(query))
+    );
   });
 
-  const handleBookmarkAdded = useCallback(
-    (newBookmark: Bookmark) => {
-      setBookmarks((prev) => {
-        if (prev.some((b) => b.id === newBookmark.id)) return prev;
-        return [newBookmark, ...prev];
-      });
-      addNotification("add", "Bookmark Saved", `Added "${newBookmark.title}"`);
-    },
-    [addNotification],
-  );
-
-  const handleBookmarkUpdated = useCallback(
-    (updatedBookmark: Bookmark) => {
-      setBookmarks((prev) =>
-        prev.map((b) => (b.id === updatedBookmark.id ? updatedBookmark : b)),
-      );
-    },
-    [],
-  );
-
-  const handleBookmarkDeleted = useCallback((id: string) => {
+  const handleDelete = (id: string) => {
     setBookmarks((prev) => prev.filter((b) => b.id !== id));
-  }, []);
+    router.refresh(); // Update server count/state
+  };
 
-  const handleSignOut = async () => {
-    await supabase.auth.signOut();
-    window.location.href = "/";
+  const handleEdit = (bookmark: Bookmark) => {
+    setEditingBookmark(bookmark);
+    setIsModalOpen(true);
   };
 
   return (
-    <div className="min-h-screen bg-surface-container-lowest flex font-display text-on-surface">
-      {/* Sidebar Navigation */}
-      <aside className="fixed left-0 top-0 h-full flex flex-col pt-8 pb-4 bg-white/70 backdrop-blur-xl h-screen w-64 border-r border-outline-variant/20 z-50">
-        <div className="px-6 mb-10">
-          <Link href="/dashboard" className="block">
-            <h1 className="text-xl font-black text-on-background tracking-tight">
-              ZenMark
-            </h1>
-            <p className="text-[10px] text-outline font-medium uppercase tracking-[0.2em] mt-1">
-              Curate Clarity
-            </p>
-          </Link>
-        </div>
-        <nav className="flex-1 space-y-1">
-          <div
-            className={`px-4 py-2 mx-2 flex items-center gap-3 transition-all cursor-pointer rounded-xl ${
-              !isSettingsPage && currentView === "all" && activeTag === null
-                ? "text-primary font-semibold border-l-2 border-primary bg-primary/5"
-                : "text-outline hover:text-on-background hover:translate-x-1"
-            }`}
-            onClick={() => {
-              setCurrentView("all");
-              setActiveTag(null);
-              if (isSettingsPage) window.location.href = "/dashboard";
-            }}
-          >
-            <span className="material-symbols-outlined">bookmark</span>
-            <span className="font-body-sm">All Bookmarks</span>
-          </div>
-          <div
-            className={`px-4 py-2 mx-2 flex items-center gap-3 transition-all cursor-pointer rounded-xl ${
-              !isSettingsPage && currentView === "recent"
-                ? "text-primary font-semibold border-l-2 border-primary bg-primary/5"
-                : "text-outline hover:text-on-background hover:translate-x-1"
-            }`}
-            onClick={() => {
-              setCurrentView("recent");
-              setActiveTag(null);
-              if (isSettingsPage) window.location.href = "/dashboard";
-            }}
-          >
-            <span className="material-symbols-outlined">schedule</span>
-            <span className="font-body-sm">Recent</span>
-          </div>
-          <div
-            className={`px-4 py-2 mx-2 flex items-center gap-3 transition-all cursor-pointer rounded-xl ${
-              !isSettingsPage && currentView === "collections"
-                ? "text-primary font-semibold border-l-2 border-primary bg-primary/5"
-                : "text-outline hover:text-on-background hover:translate-x-1"
-            }`}
-            onClick={() => {
-              setCurrentView("collections");
-              setActiveTag(null);
-              if (isSettingsPage) window.location.href = "/dashboard";
-            }}
-          >
-            <span className="material-symbols-outlined">folder</span>
-            <span className="font-body-sm">Collections</span>
+    <div className="min-h-screen bg-surface">
+      <DashboardHeader
+        user={user}
+        onAddClick={() => {
+          setEditingBookmark(null);
+          setIsModalOpen(true);
+        }}
+        layout={layout}
+        onLayoutChange={setLayout}
+      />
+
+      <main className="max-w-container-max mx-auto px-lg py-xl">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-lg mb-xl">
+          <div className="flex items-center gap-2 p-1 bg-surface-container rounded-2xl w-fit">
+            <button
+              onClick={() => setActiveTab("all")}
+              className={`px-6 py-2.5 rounded-xl text-body-sm font-bold transition-all ${
+                activeTab === "all"
+                  ? "bg-white text-primary shadow-sm"
+                  : "text-outline hover:text-on-surface"
+              }`}
+            >
+              All Library
+            </button>
+            <button
+              onClick={() => setActiveTab("recent")}
+              className={`px-6 py-2.5 rounded-xl text-body-sm font-bold transition-all ${
+                activeTab === "recent"
+                  ? "bg-white text-primary shadow-sm"
+                  : "text-outline hover:text-on-surface"
+              }`}
+            >
+              Recent
+            </button>
+            <button
+              onClick={() => setActiveTab("collections")}
+              className={`px-6 py-2.5 rounded-xl text-body-sm font-bold transition-all ${
+                activeTab === "collections"
+                  ? "bg-white text-primary shadow-sm"
+                  : "text-outline hover:text-on-surface"
+              }`}
+            >
+              Collections
+            </button>
           </div>
 
-          <div className="pt-8 pb-2 px-6">
-            <span className="text-[10px] font-bold text-outline uppercase tracking-widest">
-              Workspace
+          <div className="relative flex-1 max-w-md group">
+            <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-outline group-focus-within:text-primary transition-colors">
+              search
             </span>
+            <input
+              type="text"
+              placeholder="Search bookmarks, tags, or links..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-12 pr-6 py-3.5 bg-white border border-outline-variant/30 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all ambient-shadow"
+            />
           </div>
-
-          <Link
-            href="/dashboard/settings"
-            className={`flex items-center gap-3 px-4 py-3 mx-2 rounded-xl transition-all ${
-              isSettingsPage
-                ? "text-primary font-semibold border-l-2 border-primary bg-primary/5"
-                : "text-outline hover:text-on-background hover:translate-x-1"
-            }`}
-          >
-            <span className="material-symbols-outlined">settings</span>
-            <span className="font-body-sm">Settings</span>
-          </Link>
-        </nav>
-
-        {/* Tags Section (Only in main view) */}
-        {!isSettingsPage && allTags.length > 0 && (
-          <div className="px-2 mb-4">
-            <div className="text-[10px] font-bold text-outline px-4 mb-2 uppercase tracking-widest">
-              TAGS
-            </div>
-            <div className="space-y-1 max-h-[200px] overflow-y-auto hide-scrollbar">
-              {allTags.map((tag) => (
-                <div
-                  key={tag}
-                  className={`px-4 py-2 flex items-center gap-3 transition-all cursor-pointer rounded-xl ${
-                    activeTag === tag
-                      ? "text-primary font-semibold bg-primary/5"
-                      : "text-outline hover:text-on-background hover:translate-x-1"
-                  }`}
-                  onClick={() => setActiveTag(tag)}
-                >
-                  <span className="material-symbols-outlined text-sm">
-                    label
-                  </span>
-                  <span className="font-body-sm">{tag}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        <div className="px-4 mt-auto border-t border-outline-variant/20 pt-4">
-          <button
-            onClick={handleSignOut}
-            className="w-full flex items-center gap-3 px-4 py-3 text-error hover:bg-error/5 rounded-xl transition-colors active:scale-95"
-          >
-            <span className="material-symbols-outlined">logout</span>
-            <span className="font-body-sm font-semibold">Sign Out</span>
-          </button>
         </div>
-      </aside>
 
-      {/* Main Content Area */}
-      <main className="ml-64 flex-1 p-8 min-h-screen">
-        {/* TopNavBar Shell */}
-        <header className="fixed top-0 right-0 left-64 z-40 flex items-center justify-between px-8 w-[calc(100%-16rem)] h-16 border-b border-outline-variant/20 bg-white/80 backdrop-blur-2xl shadow-sm">
-          <div className="flex items-center gap-4 w-1/2">
-            <div className="relative w-full ">
-              <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline text-sm">
-                search
-              </span>
-              <input
-                type="text"
-                placeholder="Search bookmarks, URLs, or tags..."
-                className="w-full h-10 pl-10 pr-4 bg-surface-container-low border border-outline-variant/30 rounded-xl text-body-sm focus:outline-none focus:ring-2 focus:ring-primary/10 focus:border-primary transition-all"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
-            </div>
-          </div>
+        <BookmarkList
+          bookmarks={filteredBookmarks}
+          searchQuery={searchQuery}
+          onDelete={handleDelete}
+          onEdit={handleEdit}
+          isEmpty={bookmarks.length === 0}
+          isFiltered={searchQuery.length > 0}
+          onAddClick={() => {
+            setEditingBookmark(null);
+            setIsModalOpen(true);
+          }}
+          layout={layout}
+        />
 
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2 border-r border-outline-variant/30 pr-4">
-              <div
-                className={`w-2 h-2 rounded-full ${isRealtime ? "bg-success" : "bg-outline/30 animate-pulse"}`}
-              ></div>
-              <span className="text-[10px] font-bold text-outline uppercase tracking-widest">
-                {isRealtime ? "Live Sync" : "Connecting..."}
-              </span>
+        {/* Pagination UI */}
+        {totalPages > 1 && (
+          <div className="mt-16 flex items-center justify-center gap-4">
+            <button
+              onClick={() => handlePageChange(currentPage - 1)}
+              disabled={currentPage === 1}
+              className="w-12 h-12 flex items-center justify-center rounded-2xl bg-white border border-outline-variant/30 text-outline hover:text-primary hover:border-primary disabled:opacity-30 disabled:hover:text-outline disabled:hover:border-outline-variant/30 transition-all shadow-sm active:scale-95"
+            >
+              <span className="material-symbols-outlined">chevron_left</span>
+            </button>
+            
+            <div className="flex items-center gap-2 px-4 py-2 bg-surface-container rounded-2xl border border-outline-variant/10">
+              <span className="text-body-sm font-bold text-on-surface">Page</span>
+              <div className="flex items-center gap-1">
+                {[...Array(totalPages)].map((_, i) => {
+                  const pageNum = i + 1;
+                  if (
+                    pageNum === 1 || 
+                    pageNum === totalPages || 
+                    (pageNum >= currentPage - 1 && pageNum <= currentPage + 1)
+                  ) {
+                    return (
+                      <button
+                        key={pageNum}
+                        onClick={() => handlePageChange(pageNum)}
+                        className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-black transition-all ${
+                          currentPage === pageNum
+                            ? "bg-primary text-white shadow-md shadow-primary/20 scale-110"
+                            : "text-outline hover:text-on-surface hover:bg-white"
+                        }`}
+                      >
+                        {pageNum}
+                      </button>
+                    );
+                  }
+                  if (
+                    (pageNum === 2 && currentPage > 3) || 
+                    (pageNum === totalPages - 1 && currentPage < totalPages - 2)
+                  ) {
+                    return <span key={pageNum} className="text-outline text-[10px]">•••</span>;
+                  }
+                  return null;
+                })}
+              </div>
+              <span className="text-body-sm text-outline font-medium">of {totalPages}</span>
             </div>
 
             <button
-              onClick={() => {
-                setEditingBookmark(undefined);
-                setIsModalOpen(true);
-              }}
-              className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-primary to-secondary text-white rounded-lg font-body-sm font-semibold hover:opacity-90 active:scale-95 transition-all shadow-sm"
+              onClick={() => handlePageChange(currentPage + 1)}
+              disabled={currentPage === totalPages}
+              className="w-12 h-12 flex items-center justify-center rounded-2xl bg-white border border-outline-variant/30 text-outline hover:text-primary hover:border-primary disabled:opacity-30 disabled:hover:text-outline disabled:hover:border-outline-variant/30 transition-all shadow-sm active:scale-95"
             >
-              <span className="material-symbols-outlined text-sm">add</span>
-              Add Bookmark
+              <span className="material-symbols-outlined">chevron_right</span>
             </button>
-
-            <div className="flex items-center gap-4 border-l border-outline-variant/30 pl-6 relative">
-              <button
-                onClick={() => {
-                  setIsNotificationsOpen(!isNotificationsOpen);
-                  if (!isNotificationsOpen) {
-                    setNotifications((prev) =>
-                      prev.map((n) => ({ ...n, isRead: true })),
-                    );
-                  }
-                }}
-                className="material-symbols-outlined text-outline hover:bg-surface-container p-2 rounded-full transition-colors relative"
-              >
-                notifications
-                {notifications.some((n) => !n.isRead) && (
-                  <span className="absolute top-2 right-2 w-2 h-2 bg-error rounded-full animate-pulse border-2 border-white"></span>
-                )}
-              </button>
-
-              {isNotificationsOpen && (
-                <NotificationCenter
-                  notifications={notifications}
-                  onClear={() => setNotifications([])}
-                />
-              )}
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-full bg-surface-container overflow-hidden ring-2 ring-white ring-offset-2 ring-offset-surface-container flex items-center justify-center">
-                  {user.avatar ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={user.avatar}
-                      alt={user.name}
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <span className="text-sm font-bold text-outline">
-                      {user.name.charAt(0).toUpperCase()}
-                    </span>
-                  )}
-                </div>
-              </div>
-            </div>
           </div>
-        </header>
-
-        {/* Space for fixed header */}
-        <div className="h-16 mb-8"></div>
-
-        {/* Dashboard Header */}
-        {!isSettingsPage && (
-          <div className="flex items-end justify-between mb-lg">
-            <div>
-              <h2 className="font-h1 text-h1 text-on-surface mb-xs">
-                {activeTag
-                  ? `#${activeTag}`
-                  : currentView === "recent"
-                    ? "Recently Added"
-                    : currentView === "collections"
-                      ? "Collections"
-                      : "All Bookmarks"}
-              </h2>
-              <p className="text-body-lg text-outline">
-                {currentView === "collections"
-                  ? `${allTags.length} active collection${allTags.length !== 1 ? "s" : ""} found`
-                  : bookmarks.length === 0
-                    ? "No bookmarks yet — add your first one!"
-                    : `${filteredBookmarks.length} item${filteredBookmarks.length !== 1 ? "s" : ""} organized in your digital library`}
-              </p>
-            </div>
-            <div className="flex gap-sm">
-              <button 
-                onClick={() => setLayout('grid')}
-                className={`p-2 rounded-lg border transition-all ${layout === 'grid' ? 'bg-primary/10 border-primary text-primary shadow-sm' : 'bg-white border-outline-variant/50 text-outline hover:bg-surface-container'}`}
-              >
-                <span className="material-symbols-outlined text-sm">grid_view</span>
-              </button>
-              <button 
-                onClick={() => setLayout('list')}
-                className={`p-2 rounded-lg border transition-all ${layout === 'list' ? 'bg-primary/10 border-primary text-primary shadow-sm' : 'bg-white border-outline-variant/50 text-outline hover:bg-surface-container'}`}
-              >
-                <span className="material-symbols-outlined text-sm">view_list</span>
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Dynamic Content: Bookmark List, Settings, or Collections */}
-        {isSettingsPage ? (
-          <SettingsView user={user} />
-        ) : currentView === "collections" && !activeTag ? (
-          <CollectionsView
-            bookmarks={bookmarks}
-            onTagClick={(tag) => {
-              setActiveTag(tag);
-              setCurrentView("all");
-            }}
-          />
-        ) : (
-          <BookmarkList
-            bookmarks={filteredBookmarks}
-            searchQuery={searchQuery}
-            onDelete={handleBookmarkDeleted}
-            onEdit={(b) => {
-              setEditingBookmark(b);
-              setIsModalOpen(true);
-            }}
-            isEmpty={bookmarks.length === 0}
-            isFiltered={filteredBookmarks.length < bookmarks.length}
-            onAddClick={() => {
-              setEditingBookmark(undefined);
-              setIsModalOpen(true);
-            }}
-            layout={layout}
-          />
         )}
       </main>
 
-      {/* Add/Edit Bookmark Modal */}
+      <NotificationCenter userId={user.id} />
+
       {isModalOpen && (
         <BookmarkModal
-          userId={user.id}
-          bookmark={editingBookmark}
+          isOpen={isModalOpen}
           onClose={() => {
             setIsModalOpen(false);
-            setEditingBookmark(undefined);
+            setEditingBookmark(null);
           }}
-          onSuccess={editingBookmark ? handleBookmarkUpdated : handleBookmarkAdded}
+          onSuccess={(bookmark) => {
+            if (editingBookmark) {
+              setBookmarks((prev) =>
+                prev.map((b) => (b.id === bookmark.id ? bookmark : b))
+              );
+            } else {
+              // Note: In paginated mode, newly added item might not be on current page
+              // but we show it optimistically if on page 1.
+              if (currentPage === 1) {
+                setBookmarks((prev) => [bookmark, ...prev].slice(0, 9));
+              }
+            }
+            router.refresh();
+          }}
+          userId={user.id}
+          initialBookmark={editingBookmark || undefined}
         />
       )}
-
-      {/* Contextual FAB (Mobile friendly/Always accessible) */}
-      <button
-        onClick={() => {
-          setEditingBookmark(undefined);
-          setIsModalOpen(true);
-        }}
-        className="fixed bottom-8 right-8 w-14 h-14 bg-gradient-to-tr from-primary to-secondary text-white rounded-full shadow-lg flex items-center justify-center hover:scale-105 active:scale-95 transition-all z-50 md:hidden"
-      >
-        <span className="material-symbols-outlined text-2xl">add</span>
-      </button>
     </div>
   );
 }

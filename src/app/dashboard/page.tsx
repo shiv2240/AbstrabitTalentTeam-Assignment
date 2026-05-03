@@ -4,7 +4,11 @@ import { BookmarkDashboard } from "@/components/BookmarkDashboard";
 import { Bookmark } from "@/types/bookmark";
 import { getCachedBookmarks } from "@/utils/bookmarks";
 
-export default async function DashboardPage() {
+export default async function DashboardPage(props: {
+  searchParams: Promise<{ page?: string }>;
+}) {
+  const searchParams = await props.searchParams;
+  const page = parseInt(searchParams.page || "1", 10);
   const supabase = await createClient();
 
   // Fetch user first to get the ID for the cache key
@@ -16,8 +20,8 @@ export default async function DashboardPage() {
     redirect("/login");
   }
 
-  // Use the cached fetcher (built-in "Redis-like" speed)
-  const bookmarks = await getCachedBookmarks(user.id);
+  // Use the paginated cached fetcher (built-in "Redis-like" speed)
+  const { bookmarks, totalCount } = await getCachedBookmarks(user.id, page, 9);
 
   return (
     <BookmarkDashboard
@@ -27,7 +31,9 @@ export default async function DashboardPage() {
         avatar: user.user_metadata?.avatar_url ?? null,
         name: user.user_metadata?.full_name ?? user.email ?? "User",
       }}
-      initialBookmarks={(bookmarks as Bookmark[]) ?? []}
+      initialBookmarks={bookmarks}
+      totalCount={totalCount}
+      currentPage={page}
     />
   );
 }

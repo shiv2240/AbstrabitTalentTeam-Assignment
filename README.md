@@ -2,7 +2,7 @@
 
 ZenMark is a premium digital library built for clarity and speed. It transforms your scattered links into a curated, real-time collection with professional-grade performance and security.
 
-**Live Demo:** [https://abstrabit-talent-team-assignment.vercel.app](https://abstrabit-talent-team-assignment.vercel.app)
+**Live Demo:** [https://abstrabit-talent-team-assignment.vercel.app/](https://abstrabit-talent-team-assignment.vercel.app/)
 **GitHub:** [https://github.com/shiv2240/AbstrabitTalentTeam-Assignment](https://github.com/shiv2240/AbstrabitTalentTeam-Assignment)
 
 ---
