@@ -6,19 +6,21 @@ import { Bookmark } from "@/types/bookmark";
 export default async function DashboardPage() {
   const supabase = await createClient();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // Parallelize user and bookmark fetching for better performance
+  const [userResult, bookmarksResult] = await Promise.all([
+    supabase.auth.getUser(),
+    supabase.from("bookmarks")
+      .select("*")
+      .order("created_at", { ascending: false })
+  ]);
+
+  const user = userResult.data.user;
+  const bookmarks = bookmarksResult.data;
+  const error = bookmarksResult.error;
 
   if (!user) {
     redirect("/login");
   }
-
-  // Fetch initial bookmarks server-side for fast first render
-  const { data: bookmarks, error } = await supabase
-    .from("bookmarks")
-    .select("*")
-    .order("created_at", { ascending: false });
 
   if (error) {
     console.error("Error fetching bookmarks:", error);
