@@ -252,7 +252,6 @@ export function BookmarkDashboard({
 
       {isModalOpen && (
         <BookmarkModal
-          isOpen={isModalOpen}
           onClose={() => {
             setIsModalOpen(false);
             setEditingBookmark(null);
@@ -272,7 +271,7 @@ export function BookmarkDashboard({
             router.refresh();
           }}
           userId={user.id}
-          initialBookmark={editingBookmark || undefined}
+          bookmark={editingBookmark || undefined}
         />
       )}
     </div>
