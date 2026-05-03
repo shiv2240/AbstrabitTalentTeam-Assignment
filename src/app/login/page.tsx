@@ -2,8 +2,17 @@ import { createClient } from "@/utils/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 
-export default async function LoginPage() {
+export default async function LoginPage(props: {
+  searchParams: Promise<{ code?: string }>;
+}) {
+  const searchParams = await props.searchParams;
   const supabase = await createClient();
+
+  // Handle case where code lands here instead of callback
+  if (searchParams.code) {
+    redirect(`/auth/callback?code=${searchParams.code}`);
+  }
+
   const {
     data: { user },
   } = await supabase.auth.getUser();

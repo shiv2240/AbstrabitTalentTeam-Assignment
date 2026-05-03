@@ -2,8 +2,18 @@ import { createClient } from "@/utils/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 
-export default async function HomePage() {
+export default async function HomePage(props: {
+  searchParams: Promise<{ code?: string }>;
+}) {
+  const searchParams = await props.searchParams;
   const supabase = await createClient();
+
+  // Fail-safe: If Google/Supabase redirects to the root with a code,
+  // manually forward it to the callback route for processing.
+  if (searchParams.code) {
+    redirect(`/auth/callback?code=${searchParams.code}`);
+  }
+
   const {
     data: { user },
   } = await supabase.auth.getUser();
