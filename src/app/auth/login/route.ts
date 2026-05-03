@@ -7,7 +7,7 @@ export async function POST(request: Request) {
   // Use environment variable or fall back to the current request's origin
   const requestUrl = new URL(request.url);
   let siteUrl = process.env.NEXT_PUBLIC_SITE_URL || requestUrl.origin;
-  
+
   // Force HTTPS for Vercel environments to match Supabase redirect whitelists
   if (siteUrl.includes("vercel.app") && !siteUrl.startsWith("http")) {
     siteUrl = `https://${siteUrl}`;

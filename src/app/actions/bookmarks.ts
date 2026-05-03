@@ -1,11 +1,11 @@
 "use server";
 
-import { revalidateTag } from "next/cache";
+import { revalidatePath } from "next/cache";
 
 /**
- * Manually purges the bookmarks cache for a specific user.
+ * Manually purges the dashboard cache.
  * Call this after any CRUD operation to ensure the next page load is fresh.
  */
 export async function revalidateBookmarks(userId: string) {
-  revalidateTag(`bookmarks-${userId}`);
+  revalidatePath("/dashboard");
 }
