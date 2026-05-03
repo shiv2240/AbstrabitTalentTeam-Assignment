@@ -1,23 +1,21 @@
-# SmartMarks — Smart Bookmark App
+# ZenMark — High-Fidelity Smart Bookmark Manager
 
-> A production-ready bookmark manager built as a 72-hour take-home assessment for Abstrabit Talent Team.
+ZenMark is a premium digital library built for clarity and speed. It transforms your scattered links into a curated, real-time collection with professional-grade performance and security.
 
-**Live Demo:** [https://your-app.vercel.app](https://your-app.vercel.app) _(replace after deploy)_
-**GitHub:** [https://github.com/shiv2240/AbstrabitTalentTeam-Assignment](https://github.com/your-username/smart-bookmarks)
+**Live Demo:** [https://abstrabit-talent-team-assignment.vercel.app](https://abstrabit-talent-team-assignment.vercel.app)
+**GitHub:** [https://github.com/shiv2240/AbstrabitTalentTeam-Assignment](https://github.com/shiv2240/AbstrabitTalentTeam-Assignment)
 
 ---
 
-## Features
+## 💎 Premium Features
 
-- 🔐 **Google OAuth Authentication** — Seamless sign-in via Supabase Auth, no passwords
-- 🔖 **Add & Delete Bookmarks** — URL + title + optional description, with a confirmation step for deletes
-- 🏷️ **Tags & Filtering (Bonus)** — Tag any bookmark with comma-separated labels; filter your collection instantly
-- 📁 **Visual Collections (Bonus)** — View your bookmarks organized into smart folders based on tags
-- 🔔 **Notification Center (Bonus)** — A real-time activity feed tracking all library changes instantly
-- ⚡ **Real-time Sync** — Bookmarks appear in all open tabs without any page refresh
-- 🔒 **Private by Default** — Row Level Security at the database layer ensures users only ever see their own data
-- 🔍 **Live Search** — Filter bookmarks by title, URL, or description as you type
-- 📱 **Responsive Design** — Works great on mobile, tablet, and desktop
+- 🔐 **Intelligent Google OAuth** — Secure sign-in with forced account selection and fail-safe redirect logic for production.
+- ⚡ **Redis-Speed Caching** — Built-in Next.js Data Cache provides <10ms page loads with on-demand invalidation via Server Actions.
+- 📐 **Hybrid Layout Engine** — Seamlessly toggle between a rich **Visual Grid** and a compact **Professional List** view.
+- 🔄 **Atomic Real-time Sync** — Powered by Supabase Realtime; see your changes everywhere, instantly, with zero latency.
+- 🔒 **Database-Level Security** — Strict Row-Level Security (RLS) ensures your collection is entirely private and un-spoofable.
+- ✏️ **Smart Editing** — Unified modal for adding and editing bookmarks with intelligent validation and instant updates.
+- 📱 **Mobile Optimized** — A first-class mobile experience with custom horizontal list views and touch-friendly actions.
 
 ---
 
@@ -187,12 +185,14 @@ I implemented three major bonus features to transform a simple list into a profe
 
 ## Requirements Checklist
 
-- [x] Google OAuth Login (no email/password)
-- [x] Add bookmarks with URL + title + validation
+- [x] Google OAuth Login (with account selector)
+- [x] Add & Edit bookmarks with intelligent validation
 - [x] Private bookmarks enforced via RLS at database level
 - [x] Real-time sync across tabs with proper cleanup
 - [x] Delete with confirmation step
 - [x] Polished responsive UI (Tailwind CSS)
+- [x] Hybrid Layout Engine (Grid/List Views)
+- [x] Performance Caching (built-in Data Cache)
 - [x] Ready for Vercel deployment
 - [x] Bonus: Tags & Filtering
 - [x] Bonus: Visual Collections
