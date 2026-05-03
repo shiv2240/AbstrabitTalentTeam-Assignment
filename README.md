@@ -1,36 +1,187 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# SmartMarks — Smart Bookmark App
 
-## Getting Started
+> A production-ready bookmark manager built as a 72-hour take-home assessment for Abstrabit Talent Team.
 
-First, run the development server:
+**Live Demo:** [https://your-app.vercel.app](https://your-app.vercel.app) *(replace after deploy)*
+**GitHub:** [https://github.com/your-username/smart-bookmarks](https://github.com/your-username/smart-bookmarks)
+
+---
+
+## Features
+
+- 🔐 **Google OAuth Authentication** — Seamless sign-in via Supabase Auth, no passwords
+- 🔖 **Add & Delete Bookmarks** — URL + title + optional description, with a confirmation step for deletes
+- 🏷️ **Tags & Filtering (Bonus)** — Tag any bookmark with comma-separated labels; filter your collection instantly
+- ⚡ **Real-time Sync** — Bookmarks appear in all open tabs without any page refresh
+- 🔒 **Private by Default** — Row Level Security at the database layer ensures users only ever see their own data
+- 🔍 **Live Search** — Filter bookmarks by title, URL, or description as you type
+- 📱 **Responsive Design** — Works great on mobile, tablet, and desktop
+
+---
+
+## Tech Stack
+
+| Layer | Technology |
+|-------|-----------|
+| Framework | Next.js 15 (App Router) |
+| Auth | Supabase Auth (Google OAuth) |
+| Database | Supabase PostgreSQL |
+| Realtime | Supabase Realtime |
+| Styling | Tailwind CSS v4 |
+| Deployment | Vercel |
+
+---
+
+## Setup Instructions
+
+### 1. Clone the Repository
+
+```bash
+git clone https://github.com/your-username/smart-bookmarks.git
+cd smart-bookmarks
+npm install
+```
+
+### 2. Setup Supabase Project
+
+1. Go to [supabase.com](https://supabase.com) and create a new project.
+2. Once provisioned, navigate to **SQL Editor** and run the contents of [`database.sql`](./database.sql).
+3. Navigate to **Project Settings → API** and copy:
+   - `Project URL` → `NEXT_PUBLIC_SUPABASE_URL`
+   - `anon public` key → `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+
+### 3. Configure Google OAuth
+
+1. Go to [Google Cloud Console](https://console.cloud.google.com).
+2. Create a project → **APIs & Services → Credentials → Create OAuth 2.0 Client ID**.
+3. Set **Authorized redirect URIs** to:
+   ```
+   https://<your-supabase-project-ref>.supabase.co/auth/v1/callback
+   ```
+4. Copy the **Client ID** and **Client Secret**.
+5. In Supabase Dashboard → **Authentication → Providers → Google**, enable and paste your credentials.
+6. Under **Authentication → URL Configuration**, set:
+   - **Site URL**: `https://your-app.vercel.app`
+   - **Redirect URLs**: `https://your-app.vercel.app/auth/callback`
+
+### 4. Environment Variables
+
+```bash
+cp .env.example .env.local
+```
+
+```env
+NEXT_PUBLIC_SUPABASE_URL=https://your-ref.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
+NEXT_PUBLIC_SITE_URL=http://localhost:3000
+```
+
+### 5. Run Locally
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+---
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Row Level Security (RLS) Explained
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+RLS is enforced at the **PostgreSQL database layer**, not just in application code. Even if someone bypassed the frontend and called Supabase APIs directly with the anon key, they could **never** read, modify, or delete another user's bookmarks.
 
-## Learn More
+```sql
+-- SELECT: Users can only read their own rows
+CREATE POLICY "Users can view their own bookmarks"
+ON bookmarks FOR SELECT USING (auth.uid() = user_id);
 
-To learn more about Next.js, take a look at the following resources:
+-- INSERT: user_id must match the authenticated UID
+CREATE POLICY "Users can insert their own bookmarks"
+ON bookmarks FOR INSERT WITH CHECK (auth.uid() = user_id);
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+-- UPDATE: can only update their own rows
+CREATE POLICY "Users can update their own bookmarks"
+ON bookmarks FOR UPDATE
+USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+-- DELETE: can only delete their own rows
+CREATE POLICY "Users can delete their own bookmarks"
+ON bookmarks FOR DELETE USING (auth.uid() = user_id);
+```
 
-## Deploy on Vercel
+`auth.uid()` is evaluated server-side by Supabase from the verified JWT — it cannot be spoofed by client code.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+---
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Real-time Sync Implementation
+
+Powered by **Supabase Realtime Postgres Changes** — Supabase streams WAL events to clients via WebSockets.
+
+```ts
+const channel = supabase
+  .channel("bookmarks-realtime")
+  .on("postgres_changes", {
+    event: "INSERT",
+    schema: "public",
+    table: "bookmarks",
+    filter: `user_id=eq.${user.id}`,
+  }, (payload) => {
+    setBookmarks(prev => {
+      if (prev.some(b => b.id === payload.new.id)) return prev; // dedup
+      return [payload.new as Bookmark, ...prev];
+    });
+  })
+  .subscribe();
+
+// Cleanup on unmount — prevents memory leaks
+return () => { supabase.removeChannel(channel); };
+```
+
+The `filter` scopes the subscription to the current user's rows only, preventing unnecessary data transfer. Cleanup is handled in the `useEffect` return function.
+
+---
+
+## Bonus Feature: Tags & Filtering
+
+When adding a bookmark, users type comma-separated tags (e.g., `dev, tools, ai`), stored as a PostgreSQL `TEXT[]` array. On the dashboard, all unique tags appear as pill buttons. Clicking filters the list client-side — no extra DB queries.
+
+**Why?** Bookmark managers become unusable as lists grow. Tags provide lightweight, many-to-many organization with no folder nesting complexity and instant UX feedback.
+
+---
+
+## Challenges & Solutions
+
+| Challenge | Solution |
+|-----------|----------|
+| Optimistic + realtime double-insert | Deduplication by `id` before adding to state |
+| `cookies()` is async in Next.js 15 | `await cookies()` in server client |
+| Google avatar blocked by Next.js Image | Added `lh3.googleusercontent.com` to `remotePatterns` |
+
+---
+
+## Deployment on Vercel
+
+1. Push to a public GitHub repository.
+2. Go to [vercel.com](https://vercel.com) → **New Project** → Import your repo.
+3. Add environment variables in Vercel project settings.
+4. Deploy. Update Supabase Auth **URL Configuration** with the live Vercel URL.
+
+---
+
+## Future Improvements
+
+1. **Auto-fetch page title** — Edge function to scrape `<title>` from URL
+2. **Browser Extension** — One-click save from the toolbar
+3. **Import from browser** — Parse exported HTML bookmark files
+4. **Shareable collections** — Make specific bookmark sets public
+
+---
+
+## Requirements Checklist
+
+- [x] Google OAuth Login (no email/password)
+- [x] Add bookmarks with URL + title + validation
+- [x] Private bookmarks enforced via RLS at database level
+- [x] Real-time sync across tabs with proper cleanup
+- [x] Delete with confirmation step
+- [x] Polished responsive UI (Tailwind CSS)
+- [x] Ready for Vercel deployment
+- [x] Bonus feature: Tags & filtering

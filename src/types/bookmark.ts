@@ -1,0 +1,9 @@
+export type Bookmark = {
+  id: string;
+  user_id: string;
+  url: string;
+  title: string;
+  description: string | null;
+  tags: string[];
+  created_at: string;
+};
