@@ -2,29 +2,22 @@ import { createClient } from "@/utils/supabase/server";
 import { redirect } from "next/navigation";
 import { BookmarkDashboard } from "@/components/BookmarkDashboard";
 import { Bookmark } from "@/types/bookmark";
+import { getCachedBookmarks } from "@/utils/bookmarks";
 
 export default async function DashboardPage() {
   const supabase = await createClient();
 
-  // Parallelize user and bookmark fetching for better performance
-  const [userResult, bookmarksResult] = await Promise.all([
-    supabase.auth.getUser(),
-    supabase.from("bookmarks")
-      .select("*")
-      .order("created_at", { ascending: false })
-  ]);
-
-  const user = userResult.data.user;
-  const bookmarks = bookmarksResult.data;
-  const error = bookmarksResult.error;
+  // Fetch user first to get the ID for the cache key
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
   if (!user) {
     redirect("/login");
   }
 
-  if (error) {
-    console.error("Error fetching bookmarks:", error);
-  }
+  // Use the cached fetcher (built-in "Redis-like" speed)
+  const bookmarks = await getCachedBookmarks(user.id);
 
   return (
     <BookmarkDashboard

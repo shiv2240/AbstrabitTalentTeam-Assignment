@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { createClient } from "@/utils/supabase/client";
 import { Bookmark } from "@/types/bookmark";
 import toast from "react-hot-toast";
+import { revalidateBookmarks } from "@/app/actions/bookmarks";
 
 type Props = {
   userId: string;
@@ -87,6 +88,9 @@ export function BookmarkModal({ userId, onClose, onSuccess, bookmark }: Props) {
       toast.error(`Failed to ${isEditing ? "update" : "save"} bookmark.`);
       return;
     }
+
+    // Purge the Data Cache (Built-in Redis) so the next page load is instant
+    await revalidateBookmarks(userId);
 
     toast.success(`Bookmark ${isEditing ? "updated" : "saved"}!`);
     onSuccess(result.data as Bookmark);

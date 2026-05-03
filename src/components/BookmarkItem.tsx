@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Bookmark } from "@/types/bookmark";
 import { createClient } from "@/utils/supabase/client";
 import toast from "react-hot-toast";
+import { revalidateBookmarks } from "@/app/actions/bookmarks";
 
 type Props = {
   bookmark: Bookmark;
@@ -69,6 +70,9 @@ export function BookmarkItem({
         setIsDeleting(false);
         return;
       }
+
+      // Purge the Data Cache (Built-in Redis) so the next page load is instant
+      await revalidateBookmarks(bookmark.user_id);
 
       toast.success("Bookmark deleted.");
       onDelete(bookmark.id);
