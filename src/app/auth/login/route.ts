@@ -1,10 +1,12 @@
 import { createClient } from "@/utils/supabase/server";
 import { redirect } from "next/navigation";
 
-export async function POST() {
+export async function POST(request: Request) {
   const supabase = await createClient();
 
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
+  // Use environment variable or fall back to the current request's origin
+  const requestUrl = new URL(request.url);
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || requestUrl.origin;
 
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: "google",
