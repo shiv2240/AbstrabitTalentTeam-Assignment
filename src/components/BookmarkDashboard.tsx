@@ -6,6 +6,7 @@ import { DashboardHeader } from "./DashboardHeader";
 import { BookmarkList } from "./BookmarkList";
 import { BookmarkModal } from "./BookmarkModal";
 import { NotificationCenter } from "./NotificationCenter";
+import { CollectionsView } from "./CollectionsView";
 import { createClient } from "@/utils/supabase/client";
 import { useRouter } from "next/navigation";
 
@@ -26,7 +27,7 @@ export function BookmarkDashboard({
   const [editingBookmark, setEditingBookmark] = useState<Bookmark | null>(null);
   const [layout, setLayout] = useState<"grid" | "list">("grid");
   const [activeTab, setActiveTab] = useState<"all" | "recent" | "collections">(
-    "all"
+    "all",
   );
   const supabase = createClient();
   const router = useRouter();
@@ -59,7 +60,7 @@ export function BookmarkDashboard({
         () => {
           // When a change occurs, refresh the server component to get updated slice & count
           router.refresh();
-        }
+        },
       )
       .subscribe();
 
@@ -135,7 +136,7 @@ export function BookmarkDashboard({
             </button>
           </div>
 
-          <div className="relative flex-1 max-w-md group">
+          <div className="relative flex-1 group">
             <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-outline group-focus-within:text-primary transition-colors">
               search
             </span>
@@ -144,24 +145,44 @@ export function BookmarkDashboard({
               placeholder="Search bookmarks, tags, or links..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-12 pr-6 py-3.5 bg-white border border-outline-variant/30 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all ambient-shadow"
+              className="w-full pl-12 pr-12 py-3.5 bg-white border border-outline-variant/30 rounded-2xl focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all ambient-shadow"
             />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery("")}
+                className="absolute right-4 top-1/2 -translate-y-1/2 w-8 h-8 flex items-center justify-center text-outline hover:text-on-surface hover:bg-surface-container rounded-lg transition-all"
+              >
+                <span className="material-symbols-outlined text-[20px]">
+                  close
+                </span>
+              </button>
+            )}
           </div>
         </div>
 
-        <BookmarkList
-          bookmarks={filteredBookmarks}
-          searchQuery={searchQuery}
-          onDelete={handleDelete}
-          onEdit={handleEdit}
-          isEmpty={bookmarks.length === 0}
-          isFiltered={searchQuery.length > 0}
-          onAddClick={() => {
-            setEditingBookmark(null);
-            setIsModalOpen(true);
-          }}
-          layout={layout}
-        />
+        {activeTab === "collections" ? (
+          <CollectionsView
+            bookmarks={filteredBookmarks}
+            onTagClick={(tag) => {
+              setSearchQuery(tag);
+              setActiveTab("all");
+            }}
+          />
+        ) : (
+          <BookmarkList
+            bookmarks={filteredBookmarks}
+            searchQuery={searchQuery}
+            onDelete={handleDelete}
+            onEdit={handleEdit}
+            isEmpty={bookmarks.length === 0}
+            isFiltered={searchQuery.length > 0}
+            onAddClick={() => {
+              setEditingBookmark(null);
+              setIsModalOpen(true);
+            }}
+            layout={layout}
+          />
+        )}
 
         {/* Pagination UI */}
         {totalPages > 1 && (
@@ -173,15 +194,17 @@ export function BookmarkDashboard({
             >
               <span className="material-symbols-outlined">chevron_left</span>
             </button>
-            
+
             <div className="flex items-center gap-2 px-4 py-2 bg-surface-container rounded-2xl border border-outline-variant/10">
-              <span className="text-body-sm font-bold text-on-surface">Page</span>
+              <span className="text-body-sm font-bold text-on-surface">
+                Page
+              </span>
               <div className="flex items-center gap-1">
                 {[...Array(totalPages)].map((_, i) => {
                   const pageNum = i + 1;
                   if (
-                    pageNum === 1 || 
-                    pageNum === totalPages || 
+                    pageNum === 1 ||
+                    pageNum === totalPages ||
                     (pageNum >= currentPage - 1 && pageNum <= currentPage + 1)
                   ) {
                     return (
@@ -199,15 +222,21 @@ export function BookmarkDashboard({
                     );
                   }
                   if (
-                    (pageNum === 2 && currentPage > 3) || 
+                    (pageNum === 2 && currentPage > 3) ||
                     (pageNum === totalPages - 1 && currentPage < totalPages - 2)
                   ) {
-                    return <span key={pageNum} className="text-outline text-[10px]">•••</span>;
+                    return (
+                      <span key={pageNum} className="text-outline text-[10px]">
+                        •••
+                      </span>
+                    );
                   }
                   return null;
                 })}
               </div>
-              <span className="text-body-sm text-outline font-medium">of {totalPages}</span>
+              <span className="text-body-sm text-outline font-medium">
+                of {totalPages}
+              </span>
             </div>
 
             <button
@@ -221,8 +250,6 @@ export function BookmarkDashboard({
         )}
       </main>
 
-      <NotificationCenter userId={user.id} />
-
       {isModalOpen && (
         <BookmarkModal
           isOpen={isModalOpen}
@@ -233,7 +260,7 @@ export function BookmarkDashboard({
           onSuccess={(bookmark) => {
             if (editingBookmark) {
               setBookmarks((prev) =>
-                prev.map((b) => (b.id === bookmark.id ? bookmark : b))
+                prev.map((b) => (b.id === bookmark.id ? bookmark : b)),
               );
             } else {
               // Note: In paginated mode, newly added item might not be on current page
