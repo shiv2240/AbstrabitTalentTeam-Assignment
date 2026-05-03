@@ -32,6 +32,12 @@ ZenMark is a premium digital library built for clarity and speed. It transforms 
 
 ---
 
+## 🎨 Design Philosophy
+
+ZenMark's premium visual language and design tokens were inspired by **[Stitch by Google](https://stitch.withgoogle.com/projects/2537328591304733145)**. By leveraging high-fidelity design principles, we achieved a modern, glassmorphism-inspired interface that provides a professional and delightful user experience.
+
+---
+
 ## Setup Instructions
 
 ### 1. Clone the Repository
