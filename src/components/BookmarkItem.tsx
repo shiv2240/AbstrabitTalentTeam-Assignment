@@ -9,7 +9,9 @@ type Props = {
   bookmark: Bookmark;
   searchQuery: string;
   onDelete: (id: string) => void;
+  onEdit: (bookmark: Bookmark) => void;
   featured?: boolean;
+  layout?: "grid" | "list";
 };
 
 function highlight(text: string, query: string): React.ReactNode {
